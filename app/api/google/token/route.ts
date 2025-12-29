@@ -53,21 +53,64 @@ export async function POST(request: Request) {
     }
 
     // Connect to MongoDB and save/find user
-    await connectDB();
+    try {
+      await connectDB();
+    } catch (e: any) {
+      console.error('Google token - DB connection error:', e);
+      const msg = String(e?.message || e);
+      if (msg.includes('ECONNREFUSED') || msg.includes('ServerSelectionError')) {
+        return NextResponse.json({ error: 'Database connection failed' }, { status: 503 });
+      } else if (msg.toLowerCase().includes('authentication') || msg.toLowerCase().includes('bad auth')) {
+        return NextResponse.json({ error: 'Database authentication failed. Check MONGODB_URI credentials and Atlas IP whitelist.' }, { status: 503 });
+      }
+      return NextResponse.json({ error: 'Database error', details: process.env.NODE_ENV === 'development' ? msg : undefined }, { status: 500 });
+    }
     
     if (!decoded || !decoded.sub) {
       return NextResponse.json({ error: 'Invalid Google ID token' }, { status: 400 });
     }
 
-    // Normalize email and find or create the user. If created, send welcome email.
-    const email = (decoded.email || '').toLowerCase();
+    // Normalize email and safely link-or-create user. Do not overwrite existing user fields (esp. role).
+    const rawEmail = decoded.email || '';
+    const email = String(rawEmail).trim();
 
-    let user = await User.findOne({ $or: [{ googleId: decoded.sub }, { email }] });
+    function escapeRegExp(s: string) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // 1) Prefer matching by googleId
+    let user = await User.findOne({ googleId: decoded.sub });
+
+    // 2) If not found, try a case-insensitive email match and link the googleId (without changing role)
+    if (!user && email) {
+      const ciEmail = await User.findOne({ email: { $regex: new RegExp(`^${escapeRegExp(email)}$`, 'i') } });
+      if (ciEmail) {
+        // If user exists and doesn't have googleId, set it; do NOT change role or other fields
+        if (!ciEmail.googleId) {
+          try {
+            const updated = await User.findByIdAndUpdate(ciEmail._id, { $set: { googleId: decoded.sub } }, { new: true });
+            if (updated) {
+              user = updated;
+              console.info(`Linked Google account to existing user ${updated._id} (email match)`);
+            } else {
+              user = ciEmail;
+            }
+          } catch (err) {
+            console.error('Failed to link googleId to existing user:', err);
+            user = ciEmail; // fallback to the found user object
+          }
+        } else {
+          user = ciEmail;
+        }
+      }
+    }
+
     let isNewUser = false;
     if (!user) {
+      // Still not found -> create a new user (store email lowercase to avoid future mismatches)
       user = await User.create({
         googleId: decoded.sub,
-        email,
+        email: email.toLowerCase(),
         name: decoded.name,
         photoURL: decoded.picture,
         // Ensure default free trial fields are set for new users
