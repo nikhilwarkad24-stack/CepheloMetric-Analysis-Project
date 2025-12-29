@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { User } from '@/lib/mongodb';
 import { hashPassword } from '@/lib/password';
 import jwt from 'jsonwebtoken';
+import { sendEmailJS } from '@/lib/emailjs';
 
 type Body = {
   name?: string;
@@ -35,6 +36,17 @@ export async function POST(request: Request) {
       passwordHash: hash,
       salt,
     });
+
+    // Send welcome / account-creation email via EmailJS (if configured)
+    try {
+      await sendEmailJS({
+        to_name: newUser.name,
+        to_email: newUser.email,
+        app_origin: process.env.NEXT_PUBLIC_ORIGIN ?? 'http://localhost:3000',
+      });
+    } catch (err) {
+      console.error('Failed to send EmailJS welcome email', err);
+    }
 
     // Issue JWT including tokenVersion
     const appToken = jwt.sign(

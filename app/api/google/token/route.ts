@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { User } from '@/lib/mongodb';
 import jwt from 'jsonwebtoken';
+import { sendEmailJS } from '@/lib/emailjs';
 
 type RequestBody = {
   code?: string;
@@ -58,23 +59,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid Google ID token' }, { status: 400 });
     }
 
-    // Normalize email and use an upsert that only inserts on create (no updates to existing docs)
+    // Normalize email and find or create the user. If created, send welcome email.
     const email = (decoded.email || '').toLowerCase();
 
-    const user = await User.findOneAndUpdate(
-      {
-        $or: [{ googleId: decoded.sub }, { email }],
-      },
-      {
-        $setOnInsert: {
-          googleId: decoded.sub,
-          email,
-          name: decoded.name,
-          photoURL: decoded.picture,
-        },
-      },
-      { upsert: true, new: true }
-    );
+    let user = await User.findOne({ $or: [{ googleId: decoded.sub }, { email }] });
+    let isNewUser = false;
+    if (!user) {
+      user = await User.create({
+        googleId: decoded.sub,
+        email,
+        name: decoded.name,
+        photoURL: decoded.picture,
+      });
+      isNewUser = true;
+
+      // Send welcome / account-creation email via EmailJS (if configured)
+      try {
+        await sendEmailJS({
+          to_name: user.name,
+          to_email: user.email,
+          app_origin: process.env.NEXT_PUBLIC_ORIGIN ?? 'http://localhost:3000',
+        });
+      } catch (err) {
+        console.error('Failed to send EmailJS welcome email for Google signup', err);
+      }
+    }
 
     // Issue app JWT with role and tokenVersion from database (no existing user fields are modified)
     const appToken = jwt.sign(
