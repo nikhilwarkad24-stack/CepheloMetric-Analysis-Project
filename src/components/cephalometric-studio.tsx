@@ -380,7 +380,7 @@ function SidebarContent({
                                                      <div className="font-medium text-xs md:text-sm">{item.name}</div>
                                                      <div className="text-xs text-muted-foreground">{item.interpretation}</div>
                                                  </TableCell>
-                                                 <TableCell className="text-right font-mono text-xs md:text-sm">{item.value.toFixed(1)}{item.unit}</TableCell>
+                                                 <TableCell className="text-right font-mono text-xs md:text-sm">{item.value.toFixed(2)}{item.unit}</TableCell>
                                              </TableRow>
                                          ))}
                                      </TableBody>
@@ -1397,7 +1397,7 @@ export function CephalometricStudio() {
           <div className="print-only hidden">
           <h1 className="text-2xl font-bold mb-4">Cephalometric Analysis Report</h1>
           {analysis ? (
-             <div id="report-content" className="p-2 mt-4 border rounded-md print-analysis">
+             <div id="report-content" className="p-1 mt-0 border rounded-md print-analysis">
               <Table>
                 <TableHeader>
                   <TableRow>
