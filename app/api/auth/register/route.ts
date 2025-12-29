@@ -35,6 +35,10 @@ export async function POST(request: Request) {
       email,
       passwordHash: hash,
       salt,
+      // Default trial subscription / usage limits
+      subscriptionStatus: 'free',
+      analysisCount: 0,
+      analysisLimit: 3,
     });
 
     // Send welcome / account-creation email via EmailJS (if configured)

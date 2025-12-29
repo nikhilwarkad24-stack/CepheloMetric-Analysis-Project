@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, type MouseEvent, type WheelEvent } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import {
   Upload,
   Download,
@@ -40,6 +41,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { SubscriptionDialog } from './subscription-dialog';
+import { clearAuthStorage } from '@/lib/auth';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,6 +87,7 @@ interface AppUser {
   photoURL: string;
   analysisCount: number;
   subscriptionStatus: SubscriptionPlan;
+  analysisLimit?: number | null;
 }
 
 const FREE_ANALYSIS_LIMIT = 3;
@@ -400,9 +403,9 @@ function SidebarContent({
       <div className="p-4 space-y-2">
         <h3 className="font-semibold text-base">Export</h3>
         <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleExport('image')} disabled={!image}><Download className="w-4 h-4 mr-1"/>Image</Button>
-            <Button variant="outline" size="sm" onClick={() => handleExport('csv')} disabled={landmarks.filter(l => l.x !== null).length === 0}><FileJson className="w-4 h-4 mr-1"/>CSV</Button>
-            <Button variant="outline" size="sm" onClick={() => handleExport('report')} disabled={!analysis}><Printer className="w-4 h-4 mr-1"/>Report</Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport('image')} disabled={!image || !canExport}><Download className="w-4 h-4 mr-1"/>Image</Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport('csv')} disabled={landmarks.filter(l => l.x !== null).length === 0 || !canExport}><FileJson className="w-4 h-4 mr-1"/>CSV</Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport('report')} disabled={!analysis || !canExport}><Printer className="w-4 h-4 mr-1"/>Report</Button>
         </div>
       </div>
     </div>
@@ -421,6 +424,8 @@ export function CephalometricStudio() {
   const { user } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const loadedAnalysisId = searchParams?.get('id');
 
 
 
@@ -467,16 +472,23 @@ export function CephalometricStudio() {
   const [hoveredAnalysis, setHoveredAnalysis] = useState<string | null>(null);
   
   const handleSignOut = async () => {
-    if (auth) {
-      await auth.signOut();
-      router.push('/login');
-      toast({ title: 'Signed Out', description: 'You have been successfully signed out.' });
+    try {
+      if (auth && typeof auth.signOut === 'function') {
+        await auth.signOut();
+      }
+    } catch (err) {
+      // ignore
     }
+
+    // Ensure any local-storage based auth is cleared too (works when firebase is disabled)
+    clearAuthStorage();
+    window.dispatchEvent(new Event('user-changed'));
+    router.push('/login');
+    toast({ title: 'Signed Out', description: 'You have been successfully signed out.' });
   };
 
   const getInitials = (name: string | null | undefined) => {
     if (!name) return 'G'; // Guest
-    if (user?.isAnonymous) return 'G';
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
@@ -582,6 +594,30 @@ export function CephalometricStudio() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [image]);
+
+  // If an analysis id was supplied in query params, try to load it
+  useEffect(() => {
+    if (!loadedAnalysisId) return;
+    (async () => {
+      try {
+        // Try server-side fetch first
+        const res = await fetch(`/api/analysis/${loadedAnalysisId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.analysis) {
+            const a = data.analysis;
+            if (a.landmarks) setLandmarks(a.landmarks.map((l:any) => ({ ...l })));
+            if (a.analysis) setAnalysis(a.analysis);
+            if (a.meta?.imageSrc) setImage({ src: a.meta.imageSrc, naturalWidth: 1000, naturalHeight: 1000 });
+            toast({ title: 'Loaded analysis', description: 'A saved analysis was loaded.' });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load analysis by id', err);
+      }
+    })();
+  }, [loadedAnalysisId]);
 
   const handleZoom = (e: WheelEvent<HTMLDivElement>) => {
     if (!imageViewerRef.current) return;
@@ -755,22 +791,41 @@ export function CephalometricStudio() {
       return;
     }
 
+    // Free users get a 3-analysis trial
     if (effectiveUserData.subscriptionStatus === 'free' && effectiveUserData.analysisCount >= FREE_ANALYSIS_LIMIT) {
-      setShowSubscriptionDialog(true);
+      router.push('/pricing');
       return;
     }
-  
+
+    // Standard users have a limit (e.g., 100)
+    if (effectiveUserData.subscriptionStatus === 'standard' && typeof (effectiveUserData as any).analysisLimit === 'number' && (effectiveUserData as any).analysisCount >= (effectiveUserData as any).analysisLimit) {
+      router.push('/pricing');
+      return;
+    }
+
     handleCalculateAngles();
   };
 
   const handleSubscribe = async (plan: SubscriptionPlan) => {
-    if (!userDocRef) {
-        toast({ variant: 'destructive', title: 'Subscription Failed', description: 'Could not find user data.' });
-        return;
-    }
+    const updates: any = { subscriptionStatus: plan };
+    if (plan === 'standard') updates.analysisLimit = 100;
+    if (plan === 'premium') updates.analysisLimit = null; // unlimited
 
     try {
-        await updateDoc(userDocRef, { subscriptionStatus: plan });
+        if (userDocRef) {
+            await updateDoc(userDocRef, updates);
+        } else if (auth?.user) {
+            // If we have a server-authenticated user (JWT cookie), call server API
+            await fetch('/api/subscription/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates),
+            });
+        } else {
+            toast({ variant: 'destructive', title: 'Subscription Failed', description: 'Could not find user data.' });
+            return;
+        }
+
         toast({ title: 'Success!', description: `You are now subscribed to the ${plan} Plan.` });
         setShowSubscriptionDialog(false);
         router.push('/studio');
@@ -1116,8 +1171,47 @@ export function CephalometricStudio() {
       
       if (userDocRef) {
         await updateDoc(userDocRef, { analysisCount: increment(1) });
+      } else if (auth?.user) {
+        // Server-authenticated user (JWT cookie) - call server API to increment usage
+        try {
+          const res = await fetch('/api/usage/increment-analysis', { method: 'POST' });
+          if (res.status === 403) {
+            toast({ variant: 'destructive', title: 'Limit reached', description: 'Your analysis quota has been reached. Please upgrade to continue.' });
+            router.push('/pricing');
+            return;
+          }
+        } catch (err) {
+          // ignore errors, but proceed with showing results
+          console.error('Failed to increment server-side analysis count', err);
+        }
       }
-      setAnalysis(newAnalysis.filter(cat => cat.results.length > 0));
+
+      const savedAnalysis = newAnalysis.filter(cat => cat.results.length > 0);
+      setAnalysis(savedAnalysis);
+
+      // Save analysis server-side for server-auth users
+      if (auth?.user) {
+        try {
+          await fetch('/api/analysis/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: 'Analysis', landmarks, analysis: savedAnalysis, meta: { imageSrc: image?.src } }),
+          });
+        } catch (err) {
+          console.error('Failed to save analysis to server', err);
+        }
+      }
+
+      // Save analysis to Firestore for Firebase users
+      if (user && firestore) {
+        try {
+          const collectionRef = (await import('firebase/firestore')).collection(firestore, 'users', user.uid, 'analyses');
+          await (await import('firebase/firestore')).addDoc(collectionRef, { title: 'Analysis', landmarks, analysis: savedAnalysis, meta: { imageSrc: image?.src }, createdAt: new Date() });
+        } catch (err) {
+          console.error('Failed to save analysis to Firestore', err);
+        }
+      }
+
       toast({ title: 'Analysis Complete', description: 'Cephalometric measurements have been calculated.' });
     } catch (error) {
       toast({
@@ -1130,6 +1224,13 @@ export function CephalometricStudio() {
   
   const handleExport = (type: 'image' | 'csv' | 'report') => {
     if (!image) return;
+
+    if (!canExport) {
+      toast({ variant: 'destructive', title: 'Upgrade required', description: 'Downloads are available for paying customers only.' });
+      router.push('/pricing');
+      return;
+    }
+
     const placedLandmarks = landmarks.filter(l => l.x !== null && l.y !== null);
 
     if (type === 'image') {
@@ -1244,6 +1345,8 @@ export function CephalometricStudio() {
     }
   };
 
+  const canExport = (effectiveUserData?.subscriptionStatus ?? 'free') !== 'free';
+
   const sidebarProps = {
     handleFileSelect,
     handleDetectLandmarks,
@@ -1263,6 +1366,7 @@ export function CephalometricStudio() {
     fileInputRef,
     handleFileUpload,
     subscriptionStatus: userData?.subscriptionStatus,
+    canExport,
   };
 
   return (
@@ -1295,13 +1399,13 @@ export function CephalometricStudio() {
                 </SheetContent>
             </Sheet>
             
-            {user ? (
+          {(user || effectiveUserData) ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={user.photoURL ?? ''} alt={user.displayName ?? 'User'} />
-                    <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                    <AvatarImage src={(user?.photoURL ?? effectiveUserData?.photoURL) ?? ''} alt={(user?.displayName ?? effectiveUserData?.displayName) ?? 'User'} />
+                    <AvatarFallback>{getInitials(user?.displayName ?? effectiveUserData?.displayName)}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
@@ -1311,7 +1415,7 @@ export function CephalometricStudio() {
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex items-center gap-2 text-xs">
                       <Crown className="w-4 h-4 text-primary" />
-                      <span>{getSubscriptionPlanName(userData?.subscriptionStatus)}</span>
+                      <span>{getSubscriptionPlanName(userData?.subscriptionStatus ?? effectiveUserData?.subscriptionStatus)}</span>
                     </div>
                   </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -1465,33 +1569,37 @@ export function CephalometricStudio() {
         </main>
       </div>
           <div className="print-only hidden">
-          <h1 className="text-2xl font-bold mb-4">Cephalometric Analysis Report</h1>
-          {analysis ? (
-             <div id="report-content" className="p-1 mt-0 border rounded-md print-analysis">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Measurement</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Interpretation</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {analysis.flatMap(c => c.results).map((item) => (
-                    <TableRow key={item.name}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{item.value.toFixed(1)}{item.unit}</TableCell>
-                      <TableCell>{item.interpretation}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div id="report-content" className="p-2 mt-4 border rounded-md print-analysis">
-            <p>No analysis available to print.</p>
-            </div>
-          )}
+            <h1 className="text-2xl font-bold mb-4">Cephalometric Analysis Report</h1>
+            {canExport ? (
+              analysis ? (
+                 <div id="report-content" className="p-1 mt-0 border rounded-md print-analysis">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Measurement</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Interpretation</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {analysis.flatMap(c => c.results).map((item) => (
+                        <TableRow key={item.name}>
+                          <TableCell className="font-medium">{item.name}</TableCell>
+                          <TableCell>{item.value.toFixed(1)}{item.unit}</TableCell>
+                          <TableCell>{item.interpretation}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div id="report-content" className="p-2 mt-4 border rounded-md print-analysis">
+                <p>No analysis available to print.</p>
+                </div>
+              )
+            ) : (
+              <div className="p-4 border rounded-md text-sm text-muted-foreground">Printing and downloads are available for paid plans only. Please <a className="text-primary underline" href="/pricing">upgrade</a> to download or print reports.</div>
+            )}
           </div>
     </div>
   );

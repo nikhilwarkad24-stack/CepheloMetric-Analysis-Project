@@ -70,6 +70,10 @@ export async function POST(request: Request) {
         email,
         name: decoded.name,
         photoURL: decoded.picture,
+        // Ensure default free trial fields are set for new users
+        subscriptionStatus: 'free',
+        analysisCount: 0,
+        analysisLimit: 3,
       });
       isNewUser = true;
 

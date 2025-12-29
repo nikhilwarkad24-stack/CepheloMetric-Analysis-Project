@@ -15,12 +15,37 @@ export default function DashboardPage() {
   
   const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [serverUser, setServerUser] = useState<any>(null);
+  const [analyses, setAnalyses] = useState<any[]>([]);
+  const [supportState, setSupportState] = useState({ subject: '', message: '', sending: false });
   const router = useRouter();
 
   useEffect(() => {
     const userData = getUserFromStorage();
     setUser(userData);
-    setIsLoading(false);
+
+    // Try to fetch server-side user info (includes subscription and usage)
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          setServerUser(data.user);
+
+          // Fetch analyses if server-authenticated
+          const listRes = await fetch('/api/analysis/list');
+          if (listRes.ok) {
+            const listData = await listRes.json();
+            setAnalyses(listData.analyses || []);
+          }
+        }
+      } catch (err) {
+        // ignore - fallback to local storage user only
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+
   }, []);
 
   const handleLogout = () => {
@@ -87,23 +112,27 @@ export default function DashboardPage() {
             </Link>
           </Card>
 
-          {/* Quick Stats Card */}
+          {/* Account / Subscription Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Account Status</CardTitle>
+              <CardTitle className="text-lg">Subscription & Usage</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p className="font-medium">{user.email}</p>
+                <p className="text-sm text-muted-foreground">Plan</p>
+                <p className="font-medium">{serverUser?.subscriptionStatus ?? 'Free Trial'}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Name</p>
-                <p className="font-medium">{user.name}</p>
+                <p className="text-sm text-muted-foreground">Analyses used</p>
+                <p className="font-medium">{(serverUser?.analysisCount ?? 0)} / {(serverUser?.analysisLimit ?? 3) === null ? '∞' : (serverUser?.analysisLimit ?? 3)}</p>
+                <div className="w-full bg-muted h-2 rounded mt-2">
+                  <div className="h-2 rounded bg-primary" style={{ width: `${Math.min(100, Math.floor(((serverUser?.analysisCount ?? 0) / ((serverUser?.analysisLimit ?? 3) || 1)) * 100))}%` }} />
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Status</p>
-                <p className="font-medium text-green-600">Active</p>
+
+              <div className="flex gap-2">
+                <Link href="/pricing"><Button variant="outline" className="flex-1">Upgrade</Button></Link>
+                <Link href="/studio"><Button variant="ghost" className="flex-1">Open Studio</Button></Link>
               </div>
             </CardContent>
           </Card>
@@ -132,57 +161,71 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Recent Activity / Info Section */}
+        {/* Recent Activity / Reports Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-            <CardDescription>Quick guide to using Ceph Studio</CardDescription>
+            <CardTitle>Recent Analyses</CardTitle>
+            <CardDescription>Your most recent saved analyses</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-primary">1</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-foreground">Upload an Image</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Go to the studio and upload a cephalometric X-ray image
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-primary">2</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-foreground">Analyze Landmarks</h4>
-                  <p className="text-sm text-muted-foreground">
-                    AI will automatically detect anatomical landmarks
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-primary">3</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-foreground">Generate Report</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Get detailed cephalometric analysis and measurements
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-primary">4</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-foreground">Download Results</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Export your analysis as PDF or share with colleagues
-                  </p>
-                </div>
+            {analyses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No saved analyses yet. Your analyses will appear here after you create them in the Studio.</p>
+            ) : (
+              <ul className="space-y-2">
+                {analyses.map(a => (
+                  <li key={a._id} className="flex items-center justify-between p-2 border rounded">
+                    <div>
+                      <div className="font-medium">{a.title || 'Analysis'}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(a.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" asChild>
+                        <Link href={`/studio?id=${a._id}`}>View</Link>
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={async () => {
+                        // regenerate PDF client-side and download (requires export permission)
+                        try {
+                          const res = await fetch(`/api/analysis/list`);
+                          const data = await res.json();
+                          // For now simply open studio
+                          router.push('/studio');
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }}>Download</Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Support Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Contact Support</CardTitle>
+            <CardDescription>Send a message to our support team</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <input className="w-full p-2 border rounded" placeholder="Subject" value={supportState.subject} onChange={(e) => setSupportState(s => ({ ...s, subject: e.target.value }))} />
+              <textarea className="w-full p-2 border rounded" rows={4} placeholder="Describe your issue" value={supportState.message} onChange={(e) => setSupportState(s => ({ ...s, message: e.target.value }))} />
+              <div className="flex gap-2">
+                <Button onClick={async () => {
+                  setSupportState(s => ({ ...s, sending: true }));
+                  try {
+                    const res = await fetch('/api/support/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject: supportState.subject, message: supportState.message, email: user.email, name: user.name }) });
+                    if (!res.ok) throw new Error('Failed');
+                    setSupportState({ subject: '', message: '', sending: false });
+                    alert('Message sent');
+                  } catch (err) {
+                    console.error(err);
+                    setSupportState(s => ({ ...s, sending: false }));
+                    alert('Failed to send message');
+                  }
+                }} disabled={supportState.sending}>Send</Button>
+                <Button variant="ghost" onClick={() => setSupportState({ subject: '', message: '', sending: false })}>Clear</Button>
               </div>
             </div>
           </CardContent>

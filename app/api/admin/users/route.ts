@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 });
     }
 
-    // Fetch all users
-    const users = await User.find().select('_id email name photoURL role isActive createdAt');
+    // Fetch all users (include subscription & usage fields)
+    const users = await User.find().select('_id email name photoURL role isActive createdAt subscriptionStatus analysisCount analysisLimit');
 
     return NextResponse.json({ users });
   } catch (error) {

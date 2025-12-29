@@ -29,7 +29,7 @@ export async function generateCodeChallenge(verifier: string) {
   return base64UrlEncode(hashed);
 }
 
-export async function startGoogleOAuth(clientId: string) {
+export async function startGoogleOAuth(clientId: string, nextPath?: string) {
   const verifier = await generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
   // store verifier for later exchange
@@ -46,6 +46,11 @@ export async function startGoogleOAuth(clientId: string) {
     access_type: 'offline',
     prompt: 'select_account',
   });
+
+  // Use the OAuth 'state' parameter to carry the intended post-login redirect (next)
+  if (nextPath) {
+    params.set('state', nextPath);
+  }
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   window.location.href = authUrl;

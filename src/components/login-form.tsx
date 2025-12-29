@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle } from 'lucide-react';
@@ -64,7 +64,11 @@ export function LoginForm() {
       }
       if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
       window.dispatchEvent(new Event('user-changed'));
-      router.push(data.user?.role === 'admin' ? '/admin/dashboard' : '/');
+      // Respect next query param (if it's a local path) when redirecting post-login
+      const next = typeof window !== 'undefined' ? new URL(window.location.href).searchParams.get('next') : null;
+      const safeNext = next && next.startsWith('/') ? next : null;
+      const redirectTo = safeNext ?? (data.user?.role === 'admin' ? '/admin/dashboard' : '/');
+      router.push(redirectTo);
     } catch (err: any) {
       handleAuthError(err?.message || String(err));
     } finally {

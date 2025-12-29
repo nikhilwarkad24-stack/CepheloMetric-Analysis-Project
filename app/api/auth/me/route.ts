@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     // Ensure tokenVersion matches current user record
     await connectDB();
-    const user = await User.findById(payload.userId).select('tokenVersion role name email photoURL');
+    const user = await User.findById(payload.userId).select('tokenVersion role name email photoURL subscriptionStatus analysisCount analysisLimit');
     if (!user) return NextResponse.json({ user: null }, { status: 401 });
 
     if ((payload.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
@@ -40,6 +40,9 @@ export async function GET(request: NextRequest) {
         name: payload.name,
         photoURL: payload.photoURL,
         role: user.role,
+        subscriptionStatus: user.subscriptionStatus ?? 'free',
+        analysisCount: user.analysisCount ?? 0,
+        analysisLimit: user.analysisLimit ?? 3,
       },
     });
   } catch (error) {
