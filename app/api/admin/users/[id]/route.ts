@@ -31,12 +31,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const userId = params.id;
 
-    // Prevent admin from deactivating themselves
-    if (userId === payload.userId) {
+    // Read request body for action
+    const body = await request.json();
+    const action = body.action as string | undefined;
+
+    // Prevent admin from deactivating themselves for toggle (also when action is omitted)
+    if ((action === 'toggleActive' || !action) && userId === payload.userId) {
       return NextResponse.json({ error: 'Cannot deactivate your own account' }, { status: 400 });
     }
 
-    // Connect to DB and toggle user status
     await connectDB();
     const user = await User.findById(userId);
 
@@ -44,19 +47,42 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    user.isActive = !user.isActive;
-    user.updatedAt = new Date();
-    await user.save();
+    if (!action || action === 'toggleActive') {
+      // Toggle account active status
+      user.isActive = !user.isActive;
+      user.updatedAt = new Date();
+      await user.save();
 
-    return NextResponse.json({
-      success: true,
-      user: {
-        _id: user._id,
-        email: user.email,
-        name: user.name,
-        isActive: user.isActive,
-      },
-    });
+      return NextResponse.json({
+        success: true,
+        user: {
+          _id: user._id,
+          email: user.email,
+          name: user.name,
+          isActive: user.isActive,
+        },
+      });
+    }
+
+    if (action === 'setSubscription') {
+      const subscriptionStatus = body.subscriptionStatus as string | undefined;
+      const analysisLimit = body.analysisLimit as number | null | undefined;
+
+      if (!subscriptionStatus || !['free','standard','premium'].includes(subscriptionStatus)) {
+        return NextResponse.json({ error: 'Invalid subscriptionStatus' }, { status: 400 });
+      }
+
+      user.subscriptionStatus = subscriptionStatus as any;
+      if (typeof analysisLimit === 'number') user.analysisLimit = analysisLimit as any;
+      else if (subscriptionStatus === 'free') user.analysisLimit = 3 as any;
+      else if (subscriptionStatus === 'standard') user.analysisLimit = 100 as any;
+      else user.analysisLimit = (null as any);
+
+      await user.save();
+      return NextResponse.json({ success: true, user: { _id: user._id, subscriptionStatus: user.subscriptionStatus, analysisLimit: user.analysisLimit } });
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('Error toggling user status:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

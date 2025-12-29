@@ -21,7 +21,8 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value;
 
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    // Redirect to login and preserve the original path so the user can be sent back after authentication
+    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(path)}`, request.url));
   }
 
   try {
@@ -34,10 +35,10 @@ export async function middleware(request: NextRequest) {
       try {
         await connectDB();
         const user = await User.findById(payload.userId).select('tokenVersion role');
-        if (!user) return NextResponse.redirect(new URL('/login', request.url));
+        if (!user) return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(path)}`, request.url));
 
         if ((payload.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
-          return NextResponse.redirect(new URL('/login', request.url));
+          return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(path)}`, request.url));
         }
 
         // Check if this is an admin route
@@ -56,7 +57,7 @@ export async function middleware(request: NextRequest) {
   } catch (error) {
     // Token is invalid or expired
     console.error('Token verification failed:', error);
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(path)}`, request.url));
   }
 }
 

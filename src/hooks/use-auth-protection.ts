@@ -9,7 +9,8 @@ export function useAuthProtection() {
 
   useEffect(() => {
     if (!isLoggedIn()) {
-      router.push('/login');
+      const nextPath = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/';
+      router.push(`/login?next=${encodeURIComponent(nextPath)}`);
     }
   }, [router]);
 }

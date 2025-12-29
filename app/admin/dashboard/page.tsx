@@ -6,6 +6,8 @@ import { getUserFromStorage, type UserData } from '@/lib/auth';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/icons';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -38,6 +40,8 @@ interface AdminUser {
   role: string;
   isActive: boolean;
   createdAt: string;
+  subscriptionStatus?: 'free' | 'standard' | 'premium';
+  analysisLimit?: number | null;
 }
 
 export default function AdminDashboardPage() {
@@ -117,6 +121,73 @@ export default function AdminDashboardPage() {
     } finally {
       localStorage.removeItem('user');
       router.push('/login');
+    }
+  };
+
+  // Admin: set subscription plan for a user
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailModalUser, setEmailModalUser] = useState<AdminUser | null>(null);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [isEmailSending, setIsEmailSending] = useState(false);
+
+  const handleSetSubscription = async (userId: string, subscriptionStatus: string) => {
+    const analysisLimit = subscriptionStatus === 'free' ? 3 : subscriptionStatus === 'standard' ? 100 : null;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setSubscription', subscriptionStatus, analysisLimit }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(users.map(u => u._id === userId ? { ...u, subscriptionStatus: data.user.subscriptionStatus, analysisLimit: data.user.analysisLimit } : u));
+        toast({ title: 'Subscription updated', description: `Set to ${subscriptionStatus}` });
+      } else {
+        const err = await res.json();
+        toast({ title: 'Failed to update', description: err.error || 'Unknown error' });
+      }
+    } catch (err) {
+      console.error('Set subscription failed', err);
+      toast({ title: 'Request failed', description: 'Could not update subscription' });
+    }
+  };
+
+  const openEmailModal = (u: AdminUser) => {
+    setEmailModalUser(u);
+    setEmailSubject(`Hello ${u.name}`);
+    setEmailMessage('');
+    setEmailModalOpen(true);
+  };
+
+  const closeEmailModal = () => {
+    setEmailModalOpen(false);
+    setEmailModalUser(null);
+    setEmailSubject('');
+    setEmailMessage('');
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailModalUser) return;
+    setIsEmailSending(true);
+    try {
+      const res = await fetch(`/api/admin/users/${emailModalUser._id}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: emailSubject, message: emailMessage, to_email: emailModalUser.email, to_name: emailModalUser.name }),
+      });
+      if (res.ok) {
+        toast({ title: 'Email sent', description: `Message sent to ${emailModalUser.email}` });
+        closeEmailModal();
+      } else {
+        const err = await res.json();
+        toast({ title: 'Email failed', description: err.error || 'Unknown error' });
+      }
+    } catch (err) {
+      console.error('Send email failed', err);
+      toast({ title: 'Request failed', description: 'Could not send email' });
+    } finally {
+      setIsEmailSending(false);
     }
   };
 
@@ -323,15 +394,23 @@ export default function AdminDashboardPage() {
                             {new Date(u.createdAt).toLocaleDateString()}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant={u.isActive ? 'destructive' : 'default'}
-                              size="sm"
-                              onClick={() => handleToggleStatus(u._id)}
-                              disabled={isTogglingId === u._id || u._id === user.id}
-                              title={u._id === user.id ? "You can't deactivate your own account" : ''}
-                            >
-                              {isTogglingId === u._id ? 'Processing...' : u.isActive ? 'Deactivate' : 'Activate'}
-                            </Button>
+                            <div className="flex items-center gap-2">
+<select className="input px-2 py-1" value={u.subscriptionStatus || 'free'} onChange={(e) => handleSetSubscription(u._id, e.target.value)}>
+                                <option value="free">Free</option>
+                                <option value="standard">Standard</option>
+                                <option value="premium">Premium</option>
+                              </select>
+                              <Button
+                                variant={u.isActive ? 'destructive' : 'default'}
+                                size="sm"
+                                onClick={() => handleToggleStatus(u._id)}
+                                disabled={isTogglingId === u._id || u._id === user.id}
+                                title={u._id === user.id ? "You can't deactivate your own account" : ''}
+                              >
+                                {isTogglingId === u._id ? 'Processing...' : u.isActive ? 'Deactivate' : 'Activate'}
+                              </Button>
+                              <Button size="sm" onClick={() => openEmailModal(u)} variant="outline">Email</Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -351,6 +430,26 @@ export default function AdminDashboardPage() {
           </Card>
         </div>
       </div>
+      <Dialog open={emailModalOpen} onOpenChange={(open) => setEmailModalOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Email to {emailModalUser?.name}</DialogTitle>
+            <DialogDescription>Compose a message to the user</DialogDescription>
+          </DialogHeader>
+          <div className="mt-2">
+            <label className="text-sm">Subject</label>
+            <Input value={emailSubject} onChange={(e) => setEmailSubject((e.target as HTMLInputElement).value)} />
+            <label className="text-sm mt-2">Message</label>
+            <Textarea value={emailMessage} onChange={(e) => setEmailMessage((e.target as HTMLTextAreaElement).value)} rows={6} />
+          </div>
+          <DialogFooter>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={closeEmailModal} disabled={isEmailSending}>Cancel</Button>
+              <Button onClick={handleSendEmail} disabled={isEmailSending || !emailSubject || !emailMessage}>{isEmailSending ? 'Sending...' : 'Send'}</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

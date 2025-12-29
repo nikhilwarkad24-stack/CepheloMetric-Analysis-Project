@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from './ui/button';
 import { useState } from 'react';
-import { LoaderCircle, Gem, Sparkles } from 'lucide-react';
+import { LoaderCircle, Gem, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Card } from './ui/card';
 import { cn } from '@/lib/utils';
 
@@ -51,12 +51,12 @@ export function SubscriptionDialog({ open, onOpenChange, onSubscribe }: Subscrip
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             <Card className="p-6 flex flex-col">
                 <h3 className="text-xl font-bold text-foreground">Standard</h3>
-                <p className="text-muted-foreground mt-1 mb-4 text-sm">Full software access for detailed manual analysis.</p>
+                <p className="text-muted-foreground mt-1 mb-4 text-sm">Access to Ceph Studio with reporting and downloads. Good for clinicians who need up to 100 analyses.</p>
                 <p className="text-4xl font-extrabold my-2">₹1000</p>
-                <p className="text-muted-foreground text-sm">One-time payment</p>
+                <p className="text-muted-foreground text-sm">One-time payment — includes 100 analyses</p>
                 <ul className="mt-6 space-y-2 text-sm text-muted-foreground flex-1">
-                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> Unlimited Analyses</li>
-                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> Full Reporting Suite</li>
+                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> 100 Analyses</li>
+                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> Full Reporting & Downloads</li>
                     <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> Image & CSV Export</li>
                 </ul>
                 <Button onClick={() => handleSubscribe('standard')} disabled={!!isSubscribing} className="w-full mt-6">
@@ -66,19 +66,18 @@ export function SubscriptionDialog({ open, onOpenChange, onSubscribe }: Subscrip
             </Card>
 
              <Card className="p-6 flex flex-col border-2 border-primary relative overflow-hidden">
-                <div className="absolute top-0 right-0 px-3 py-1 text-xs font-bold text-primary-foreground bg-primary rounded-bl-lg">Most Popular</div>
+                <div className="absolute top-0 right-0 px-3 py-1 text-xs font-bold text-primary-foreground bg-primary rounded-bl-lg">Upcoming</div>
                 <h3 className="text-xl font-bold text-primary flex items-center gap-2">Premium <Sparkles className="w-5 h-5"/></h3>
-                <p className="text-muted-foreground mt-1 mb-4 text-sm">Supercharge your workflow with AI-powered landmark detection.</p>
-                <p className="text-4xl font-extrabold my-2">₹1500</p>
-                <p className="text-muted-foreground text-sm">One-time payment</p>
+                <p className="text-muted-foreground mt-1 mb-4 text-sm">Unlimited analyses, AI landmark prediction, problem identification and summaries. This plan is coming soon.</p>
+                <p className="text-4xl font-extrabold my-2">₹3000</p>
+                <p className="text-muted-foreground text-sm">One-time payment — upcoming</p>
                  <ul className="mt-6 space-y-2 text-sm text-muted-foreground flex-1">
-                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> All Standard Features</li>
-                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> AI Landmark Detection</li>
-                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> Priority Support</li>
+                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> Unlimited Analyses (Upcoming)</li>
+                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> AI Landmark Detection (Upcoming)</li>
+                    <li className='flex items-center gap-2'><CheckCircle2 className="w-4 h-4 text-primary"/> Problem ID & Summary (Upcoming)</li>
                 </ul>
-                <Button onClick={() => handleSubscribe('premium')} disabled={!!isSubscribing} className="w-full mt-6">
-                    {isSubscribing === 'premium' ? <LoaderCircle className="w-4 h-4 mr-2 animate-spin" /> : null}
-                    Subscribe to Premium
+                <Button disabled className="w-full mt-6" title="Coming soon">
+                    Coming soon
                 </Button>
             </Card>
         </div>
@@ -93,7 +92,4 @@ export function SubscriptionDialog({ open, onOpenChange, onSubscribe }: Subscrip
   );
 }
 
-// Dummy Check icon for illustration
-const CheckCircle2 = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-)
+

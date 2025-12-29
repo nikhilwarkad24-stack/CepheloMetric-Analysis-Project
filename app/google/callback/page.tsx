@@ -51,8 +51,10 @@ export default function GoogleCallbackPage() {
           // ignore if window not available
         }
 
-        // Redirect based on user role
-        const redirectPath = data.user?.role === 'admin' ? '/admin/dashboard' : '/';
+        // Prefer redirect from OAuth 'state' param (if a safe local path exists), otherwise fall back to role-based redirect
+        const state = new URL(window.location.href).searchParams.get('state');
+        const safeState = state && state.startsWith('/') ? state : null;
+        const redirectPath = safeState ?? (data.user?.role === 'admin' ? '/admin/dashboard' : '/');
         router.push(redirectPath);
       } catch (e: any) {
         setError(e.message || String(e));
