@@ -19,9 +19,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
     }
 
-    await connectDB();
+    try {
+      await connectDB();
+    } catch (e: any) {
+      console.error('Login - DB connection error:', e);
+      const msg = String(e?.message || e);
+      if (msg.includes('ECONNREFUSED') || msg.includes('ServerSelectionError')) {
+        return NextResponse.json({ error: 'Database connection failed' }, { status: 503 });
+      } else if (msg.toLowerCase().includes('authentication') || msg.toLowerCase().includes('bad auth')) {
+        return NextResponse.json({ error: 'Database authentication failed. Check MONGODB_URI credentials and Atlas IP whitelist.' }, { status: 503 });
+      }
+      return NextResponse.json({ error: 'Database error', details: process.env.NODE_ENV === 'development' ? msg : undefined }, { status: 500 });
+    }
 
-    const user = await User.findOne({ email });
+    function escapeRegExp(s: string) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${escapeRegExp(email)}$`, 'i') } });
     if (!user || !user.passwordHash || !user.salt) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }

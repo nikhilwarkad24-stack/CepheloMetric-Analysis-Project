@@ -17,29 +17,64 @@ export async function POST(request: Request) {
     const { name, email: rawEmail, password } = body;
     const email = (rawEmail || '').toLowerCase();
 
+    // Basic server-side validation
     if (!name || !email || !password) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing fields: name, email and password are required' }, { status: 400 });
     }
 
-    await connectDB();
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(email)) {
+      return NextResponse.json({ error: 'Invalid email format' }, { status: 422 });
+    }
 
-    const existing = await User.findOne({ email });
+    if (typeof password !== 'string' || password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 422 });
+    }
+
+    try {
+      await connectDB();
+    } catch (e: any) {
+      console.error('Registration - DB connection error:', e);
+      const msg = String(e?.message || e);
+      if (msg.includes('ECONNREFUSED') || msg.includes('ServerSelectionError')) {
+        return NextResponse.json({ error: 'Database connection failed' }, { status: 503 });
+      } else if (msg.toLowerCase().includes('authentication') || msg.toLowerCase().includes('bad auth')) {
+        return NextResponse.json({ error: 'Database authentication failed. Check MONGODB_URI credentials and Atlas IP whitelist.' }, { status: 503 });
+      }
+      return NextResponse.json({ error: 'Database error', details: process.env.NODE_ENV === 'development' ? msg : undefined }, { status: 500 });
+    }
+
+    function escapeRegExp(s: string) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    const existing = await User.findOne({ email: { $regex: new RegExp(`^${escapeRegExp(email)}$`, 'i') } });
     if (existing) {
       return NextResponse.json({ error: 'User with that email already exists' }, { status: 409 });
     }
 
     const { salt, hash } = hashPassword(password);
 
-    const newUser = await User.create({
-      name,
-      email,
-      passwordHash: hash,
-      salt,
-      // Default trial subscription / usage limits
-      subscriptionStatus: 'free',
-      analysisCount: 0,
-      analysisLimit: 3,
-    });
+    let newUser;
+    try {
+      newUser = await User.create({
+        name,
+        email,
+        passwordHash: hash,
+        salt,
+        // Default trial subscription / usage limits
+        subscriptionStatus: 'free',
+        analysisCount: 0,
+        analysisLimit: 3,
+      });
+    } catch (err: any) {
+      // Handle duplicate key race or validation errors
+      console.error('User.create error', { message: err?.message, code: err?.code });
+      if (err?.code === 11000) {
+        return NextResponse.json({ error: 'User with that email already exists' }, { status: 409 });
+      }
+      return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+    }
 
     // Send welcome / account-creation email via EmailJS (if configured)
     try {
@@ -49,6 +84,7 @@ export async function POST(request: Request) {
         app_origin: process.env.NEXT_PUBLIC_ORIGIN ?? 'http://localhost:3000',
       });
     } catch (err) {
+      // Log but do not fail the signup if email sending misconfigures
       console.error('Failed to send EmailJS welcome email', err);
     }
 
@@ -70,6 +106,7 @@ export async function POST(request: Request) {
       token: appToken,
     });
 
+    // Use NextResponse cookie helper; keep same API used elsewhere in codebase
     response.cookies.set('auth_token', appToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -79,7 +116,8 @@ export async function POST(request: Request) {
 
     return response;
   } catch (e: any) {
-    console.error('Registration error:', e);
-    return NextResponse.json({ error: e.message || String(e) }, { status: 500 });
+    console.error('Registration error:', e?.message || e);
+    // Provide a safer error message to clients
+    return NextResponse.json({ error: e?.message ? String(e.message) : 'Internal server error during registration' }, { status: 500 });
   }
 }

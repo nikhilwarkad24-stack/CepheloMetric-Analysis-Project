@@ -251,6 +251,7 @@ function SidebarContent({
   fileInputRef,
   handleFileUpload,
   subscriptionStatus,
+  canExport,
 }: {
   handleFileSelect: () => void;
   handleDetectLandmarks: () => void;
@@ -270,6 +271,7 @@ function SidebarContent({
   fileInputRef: React.RefObject<HTMLInputElement>;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   subscriptionStatus: SubscriptionPlan | undefined;
+  canExport: boolean;
 }) {
   const isPremium = subscriptionStatus === 'premium';
   
