@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { User } from '@/lib/mongodb';
 import { hashPassword } from '@/lib/password';
 import jwt from 'jsonwebtoken';
+import { sendEmailJS } from '@/lib/emailjs';
 
 type Body = {
   name?: string;
@@ -38,27 +39,11 @@ export async function POST(request: Request) {
 
     // Send welcome / account-creation email via EmailJS (if configured)
     try {
-      const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID;
-      const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID;
-      const EMAILJS_USER_ID = process.env.EMAILJS_USER_ID; // also called PUBLIC_KEY in EmailJS
-
-      if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_USER_ID) {
-        await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            service_id: EMAILJS_SERVICE_ID,
-            template_id: EMAILJS_TEMPLATE_ID,
-            user_id: EMAILJS_USER_ID,
-            template_params: {
-              to_name: newUser.name,
-              to_email: newUser.email,
-            },
-          }),
-        });
-      } else {
-        console.warn('EmailJS not configured; skipping welcome email');
-      }
+      await sendEmailJS({
+        to_name: newUser.name,
+        to_email: newUser.email,
+        app_origin: process.env.NEXT_PUBLIC_ORIGIN ?? 'http://localhost:3000',
+      });
     } catch (err) {
       console.error('Failed to send EmailJS welcome email', err);
     }

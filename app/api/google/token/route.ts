@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { User } from '@/lib/mongodb';
 import jwt from 'jsonwebtoken';
+import { sendEmailJS } from '@/lib/emailjs';
 
 type RequestBody = {
   code?: string;
@@ -74,27 +75,11 @@ export async function POST(request: Request) {
 
       // Send welcome / account-creation email via EmailJS (if configured)
       try {
-        const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID;
-        const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID;
-        const EMAILJS_USER_ID = process.env.EMAILJS_USER_ID;
-
-        if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_USER_ID) {
-          await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              service_id: EMAILJS_SERVICE_ID,
-              template_id: EMAILJS_TEMPLATE_ID,
-              user_id: EMAILJS_USER_ID,
-              template_params: {
-                to_name: user.name,
-                to_email: user.email,
-              },
-            }),
-          });
-        } else {
-          console.warn('EmailJS not configured; skipping welcome email for Google signup');
-        }
+        await sendEmailJS({
+          to_name: user.name,
+          to_email: user.email,
+          app_origin: process.env.NEXT_PUBLIC_ORIGIN ?? 'http://localhost:3000',
+        });
       } catch (err) {
         console.error('Failed to send EmailJS welcome email for Google signup', err);
       }
