@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUserFromStorage, type UserData } from '@/lib/auth';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/icons';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -18,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
 import {
   Table,
   TableBody,
@@ -41,6 +43,9 @@ interface AdminUser {
 export default function AdminDashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
   const [isTogglingId, setIsTogglingId] = useState<string | null>(null);
   const router = useRouter();
@@ -122,6 +127,41 @@ export default function AdminDashboardPage() {
       .join('')
       .toUpperCase()
       .substring(0, 2);
+  };
+
+  const { toast } = useToast();
+
+  const filteredUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+  }, [users, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const currentPageUsers = filteredUsers.slice(pageStart, pageStart + pageSize);
+
+  const handleExportCSV = () => {
+    if (filteredUsers.length === 0) {
+      toast({ title: 'No users to export', description: 'Adjust your search or filters and try again.' });
+      return;
+    }
+    const csvRows = [['ID', 'Name', 'Email', 'Role', 'Status', 'CreatedAt']];
+    filteredUsers.forEach(u => {
+      csvRows.push([u._id, u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt]);
+    });
+    const csvContent = csvRows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'users-export.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: 'Export started', description: 'CSV download should begin shortly.' });
   };
 
   if (!user) {
@@ -214,6 +254,21 @@ export default function AdminDashboardPage() {
               <CardDescription>View and manage user accounts</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2 w-full md:max-w-md">
+                  <Input placeholder="Search users by name or email..." value={searchQuery} onChange={(e) => { setSearchQuery((e.target as HTMLInputElement).value); setPage(1); }} />
+                  <Button variant="outline" size="sm" onClick={handleExportCSV}>Export CSV</Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground">Per page:</label>
+                  <select className="input px-2 py-1 rounded border" value={pageSize} onChange={(e) => { setPageSize(Number((e.target as HTMLSelectElement).value)); setPage(1); }}>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                  </select>
+                </div>
+              </div>
+
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading users...</div>
               ) : users.length === 0 ? (
@@ -232,7 +287,7 @@ export default function AdminDashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.map((u) => (
+                      {currentPageUsers.map((u) => (
                         <TableRow key={u._id}>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -282,6 +337,14 @@ export default function AdminDashboardPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">Showing {pageStart + 1} - {Math.min(pageStart + pageSize, filteredUsers.length)} of {filteredUsers.length} users</div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Previous</Button>
+                      <div className="text-sm">Page {currentPage} / {totalPages}</div>
+                      <Button size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</Button>
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>

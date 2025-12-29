@@ -34,6 +34,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './
 import { EducationalResources } from './educational-resources';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
 import { detectLandmarks } from '@/ai/flows/detect-landmarks';
+import { jsPDF } from 'jspdf';
 import type { DetectLandmarksOutput } from '@/ai/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
@@ -1170,7 +1171,76 @@ export function CephalometricStudio() {
         link.click();
         document.body.removeChild(link);
     } else if (type === 'report') {
-        window.print();
+      if (!analysis) return;
+
+      try {
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
+        let y = margin;
+        const lineHeight = 14;
+        const fontSize = 11;
+        doc.setFontSize(fontSize);
+
+        doc.text('Cephalometric Analysis Report', margin, y);
+        y += lineHeight * 1.5;
+        doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+        y += lineHeight * 1.5;
+
+        for (const category of analysis) {
+          const titleLines = doc.splitTextToSize(category.name, pageWidth - margin * 2);
+          if (y + titleLines.length * lineHeight > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.setFontSize(fontSize + 1);
+          doc.text(titleLines, margin, y);
+          y += lineHeight * titleLines.length;
+          doc.setFontSize(fontSize);
+
+          const defined = analysisCategories.find(c => c.name === category.name);
+          if (defined && defined.landmarks && defined.landmarks.length > 0) {
+            if (y + lineHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+            doc.text('Landmarks:', margin, y); y += lineHeight;
+            for (const lm of defined.landmarks) {
+              const placed = landmarks.find(l => l.id === lm.id);
+              const coord = placed && placed.x !== null && placed.y !== null ? `${placed.x.toFixed(1)}, ${placed.y.toFixed(1)}` : 'Not placed';
+              const lmLine = ` - ${lm.name} (${lm.id}): ${coord}`;
+              const wrapped = doc.splitTextToSize(lmLine, pageWidth - margin * 2);
+              if (y + wrapped.length * lineHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+              doc.text(wrapped, margin, y);
+              y += lineHeight * wrapped.length;
+            }
+            y += lineHeight / 2;
+          }
+
+          if (y + lineHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+          doc.text('Measurements:', margin, y); y += lineHeight;
+          for (const item of category.results) {
+            const line1 = ` - ${item.name}: ${item.value.toFixed(1)}${item.unit}`;
+            const wrapped1 = doc.splitTextToSize(line1, pageWidth - margin * 2);
+            if (y + wrapped1.length * lineHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+            doc.text(wrapped1, margin, y);
+            y += lineHeight * wrapped1.length;
+            if (item.interpretation) {
+              const interpLines = doc.splitTextToSize(`   Interpretation: ${item.interpretation}`, pageWidth - margin * 2);
+              if (y + interpLines.length * lineHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+              doc.text(interpLines, margin + 10, y);
+              y += lineHeight * interpLines.length;
+            }
+          }
+
+          y += lineHeight;
+          if (y + lineHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+          doc.text('------------------------------------------------------------', margin, y);
+          y += lineHeight * 1.2;
+        }
+
+        doc.save('cephalometric-analysis-report.pdf');
+      } catch (err) {
+        console.error('PDF generation failed', err);
+      }
     }
   };
 
