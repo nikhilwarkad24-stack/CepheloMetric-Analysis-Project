@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the CephAI Studio application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "username": {
+          "type": "string",
+          "description": "The username of the user. Must be unique."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the user.",
+          "format": "email"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user account was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user account was last updated.",
+          "format": "date-time"
+        },
+        "analysisCount": {
+          "type": "number",
+          "description": "The number of cephalometric analyses the user has performed.",
+          "default": 0
+        },
+        "subscriptionStatus": {
+          "type": "string",
+          "description": "The user's current subscription status.",
+          "enum": ["free", "standard", "premium"],
+          "default": "free"
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "email",
+        "createdAt",
+        "updatedAt",
+        "analysisCount",
+        "subscriptionStatus"
+      ]
+    },
+    "CephalometricImage": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CephalometricImage",
+      "type": "object",
+      "description": "Represents a cephalometric image uploaded by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the CephalometricImage entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N CephalometricImage)"
+        },
+        "imageName": {
+          "type": "string",
+          "description": "The original filename of the uploaded image."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL where the image is stored.",
+          "format": "uri"
+        },
+        "uploadDate": {
+          "type": "string",
+          "description": "Timestamp indicating when the image was uploaded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "imageName",
+        "imageUrl",
+        "uploadDate"
+      ]
+    },
+    "Landmark": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Landmark",
+      "type": "object",
+      "description": "Represents a cephalometric landmark detected or corrected in an image.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Landmark entity."
+        },
+        "imageId": {
+          "type": "string",
+          "description": "Reference to CephalometricImage. (Relationship: CephalometricImage 1:N Landmark)"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the landmark (e.g., Sella, Nasion)."
+        },
+        "x": {
+          "type": "number",
+          "description": "The x-coordinate of the landmark on the image."
+        },
+        "y": {
+          "type": "number",
+          "description": "The y-coordinate of the landmark on the image."
+        },
+        "confidence": {
+          "type": "number",
+          "description": "Confidence score of the AI detection, if applicable."
+        },
+        "isManuallyAdjusted": {
+          "type": "boolean",
+          "description": "Indicates whether the landmark was manually adjusted by the user."
+        }
+      },
+      "required": [
+        "id",
+        "imageId",
+        "name",
+        "x",
+        "y",
+        "isManuallyAdjusted"
+      ]
+    },
+    "AnalysisReport": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AnalysisReport",
+      "type": "object",
+      "description": "Represents the cephalometric analysis report generated for an image.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the AnalysisReport entity."
+        },
+        "imageId": {
+          "type": "string",
+          "description": "Reference to CephalometricImage. (Relationship: CephalometricImage 1:1 AnalysisReport)"
+        },
+        "reportData": {
+          "type": "string",
+          "description": "JSON string containing the analysis results and measurements."
+        },
+        "generationDate": {
+          "type": "string",
+          "description": "Timestamp indicating when the report was generated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "imageId",
+        "reportData",
+        "generationDate"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "google.com",
+      "apple.com"
+    ]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores public profile information for each user."
+    }
+  }
+}
