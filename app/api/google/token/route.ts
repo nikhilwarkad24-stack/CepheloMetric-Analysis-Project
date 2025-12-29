@@ -58,23 +58,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid Google ID token' }, { status: 400 });
     }
 
-    // Normalize email and use an upsert that only inserts on create (no updates to existing docs)
+    // Normalize email and find or create the user. If created, send welcome email.
     const email = (decoded.email || '').toLowerCase();
 
-    const user = await User.findOneAndUpdate(
-      {
-        $or: [{ googleId: decoded.sub }, { email }],
-      },
-      {
-        $setOnInsert: {
-          googleId: decoded.sub,
-          email,
-          name: decoded.name,
-          photoURL: decoded.picture,
-        },
-      },
-      { upsert: true, new: true }
-    );
+    let user = await User.findOne({ $or: [{ googleId: decoded.sub }, { email }] });
+    let isNewUser = false;
+    if (!user) {
+      user = await User.create({
+        googleId: decoded.sub,
+        email,
+        name: decoded.name,
+        photoURL: decoded.picture,
+      });
+      isNewUser = true;
+
+      // Send welcome / account-creation email via EmailJS (if configured)
+      try {
+        const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID;
+        const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID;
+        const EMAILJS_USER_ID = process.env.EMAILJS_USER_ID;
+
+        if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_USER_ID) {
+          await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              service_id: EMAILJS_SERVICE_ID,
+              template_id: EMAILJS_TEMPLATE_ID,
+              user_id: EMAILJS_USER_ID,
+              template_params: {
+                to_name: user.name,
+                to_email: user.email,
+              },
+            }),
+          });
+        } else {
+          console.warn('EmailJS not configured; skipping welcome email for Google signup');
+        }
+      } catch (err) {
+        console.error('Failed to send EmailJS welcome email for Google signup', err);
+      }
+    }
 
     // Issue app JWT with role and tokenVersion from database (no existing user fields are modified)
     const appToken = jwt.sign(
