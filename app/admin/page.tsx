@@ -12,3 +12,4 @@ export default function AdminPage() {
   }, [router]);
 
   return <div className="flex items-center justify-center min-h-screen">Redirecting to admin dashboard...</div>;
+}
