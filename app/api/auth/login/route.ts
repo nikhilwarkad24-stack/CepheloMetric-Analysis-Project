@@ -57,6 +57,10 @@ export async function POST(request: Request) {
         email: user.email,
         name: user.name,
         role: user.role,
+        photoURL: user.photoURL,
+        subscriptionStatus: user.subscriptionStatus ?? 'free',
+        analysisLimit: user.analysisLimit ?? 3,
+        analysisCount: user.analysisCount ?? 0,
       },
       token: appToken,
     });

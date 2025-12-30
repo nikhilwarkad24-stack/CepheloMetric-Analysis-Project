@@ -101,13 +101,18 @@ export default function AdminDashboardPage() {
   const handleToggleStatus = async (userId: string) => {
     setIsTogglingId(userId);
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, { method: 'PATCH' });
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'toggleActive' }) });
       if (res.ok) {
         const data = await res.json();
-        setUsers(users.map(u => u._id === userId ? { ...u, isActive: data.user.isActive } : u));
+        setUsers(users.map((u: AdminUser) => u._id === userId ? { ...u, isActive: data.user.isActive } : u));
+        toast({ title: 'Success', description: `User ${data.user.email} is now ${data.user.isActive ? 'active' : 'inactive'}` });
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        toast({ title: 'Failed to toggle', description: err.error || 'Unknown error' });
       }
     } catch (error) {
       console.error('Failed to toggle status:', error);
+      toast({ title: 'Request failed', description: 'Could not toggle status' });
     } finally {
       setIsTogglingId(null);
     }
@@ -141,7 +146,7 @@ export default function AdminDashboardPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setUsers(users.map(u => u._id === userId ? { ...u, subscriptionStatus: data.user.subscriptionStatus, analysisLimit: data.user.analysisLimit } : u));
+        setUsers(users.map((u: AdminUser) => u._id === userId ? { ...u, subscriptionStatus: data.user.subscriptionStatus, analysisLimit: data.user.analysisLimit } : u));
         toast({ title: 'Subscription updated', description: `Set to ${subscriptionStatus}` });
       } else {
         const err = await res.json();
@@ -205,7 +210,7 @@ export default function AdminDashboardPage() {
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return users;
-    return users.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+    return users.filter((u: AdminUser) => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
   }, [users, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
@@ -219,7 +224,7 @@ export default function AdminDashboardPage() {
       return;
     }
     const csvRows = [['ID', 'Name', 'Email', 'Role', 'Status', 'CreatedAt']];
-    filteredUsers.forEach(u => {
+    filteredUsers.forEach((u: AdminUser) => {
       csvRows.push([u._id, u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt]);
     });
     const csvContent = csvRows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -305,7 +310,7 @@ export default function AdminDashboardPage() {
                 <CardTitle className="text-sm font-medium">Active Users</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{users.filter(u => u.isActive).length}</div>
+                <div className="text-2xl font-bold text-green-600">{users.filter((u: AdminUser) => u.isActive).length}</div>
               </CardContent>
             </Card>
             <Card>
@@ -313,7 +318,7 @@ export default function AdminDashboardPage() {
                 <CardTitle className="text-sm font-medium">Inactive Users</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">{users.filter(u => !u.isActive).length}</div>
+                <div className="text-2xl font-bold text-red-600">{users.filter((u: AdminUser) => !u.isActive).length}</div>
               </CardContent>
             </Card>
           </div>
@@ -327,12 +332,12 @@ export default function AdminDashboardPage() {
             <CardContent>
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2 w-full md:max-w-md">
-                  <Input placeholder="Search users by name or email..." value={searchQuery} onChange={(e) => { setSearchQuery((e.target as HTMLInputElement).value); setPage(1); }} />
+                  <Input placeholder="Search users by name or email..." value={searchQuery} onChange={(e: { target: { value: string } }) => { setSearchQuery(e.target.value); setPage(1); }} />
                   <Button variant="outline" size="sm" onClick={handleExportCSV}>Export CSV</Button>
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-muted-foreground">Per page:</label>
-                  <select className="input px-2 py-1 rounded border" value={pageSize} onChange={(e) => { setPageSize(Number((e.target as HTMLSelectElement).value)); setPage(1); }}>
+                  <select className="input px-2 py-1 rounded border" value={pageSize} onChange={(e: { target: { value: string } }) => { setPageSize(Number(e.target.value)); setPage(1); }}>
                     <option value={5}>5</option>
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -358,7 +363,7 @@ export default function AdminDashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {currentPageUsers.map((u) => (
+                      {currentPageUsers.map((u: AdminUser) => (
                         <TableRow key={u._id}>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -371,7 +376,7 @@ export default function AdminDashboardPage() {
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
                           <TableCell>
-                            <Badge variant={u.role === 'admin' ? 'destructive' : 'secondary'}>
+                            <Badge {...({ variant: u.role === 'admin' ? 'destructive' : 'secondary' } as any)}>
                               {u.role === 'admin' ? (
                                 <>
                                   <Shield className="w-3 h-3 mr-1" />
@@ -386,7 +391,7 @@ export default function AdminDashboardPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={u.isActive ? 'default' : 'secondary'}>
+                            <Badge {...({ variant: u.isActive ? 'default' : 'secondary' } as any)}>
                               {u.isActive ? 'Active' : 'Inactive'}
                             </Badge>
                           </TableCell>
@@ -395,7 +400,7 @@ export default function AdminDashboardPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-<select className="input px-2 py-1" value={u.subscriptionStatus || 'free'} onChange={(e) => handleSetSubscription(u._id, e.target.value)}>
+                              <select className="input px-2 py-1" value={u.subscriptionStatus || 'free'} onChange={(e: { target: { value: string } }) => handleSetSubscription(u._id, e.target.value)}>
                                 <option value="free">Free</option>
                                 <option value="standard">Standard</option>
                                 <option value="premium">Premium</option>
@@ -419,9 +424,9 @@ export default function AdminDashboardPage() {
                   <div className="flex items-center justify-between mt-4">
                     <div className="text-sm text-muted-foreground">Showing {pageStart + 1} - {Math.min(pageStart + pageSize, filteredUsers.length)} of {filteredUsers.length} users</div>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Previous</Button>
+                      <Button size="sm" onClick={() => setPage((p: number) => Math.max(1, p - 1))} disabled={currentPage === 1}>Previous</Button>
                       <div className="text-sm">Page {currentPage} / {totalPages}</div>
-                      <Button size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</Button>
+                      <Button size="sm" onClick={() => setPage((p: number) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</Button>
                     </div>
                   </div>
                 </div>
@@ -430,7 +435,7 @@ export default function AdminDashboardPage() {
           </Card>
         </div>
       </div>
-      <Dialog open={emailModalOpen} onOpenChange={(open) => setEmailModalOpen(open)}>
+      <Dialog open={emailModalOpen} onOpenChange={(open: boolean) => setEmailModalOpen(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Send Email to {emailModalUser?.name}</DialogTitle>
@@ -438,9 +443,9 @@ export default function AdminDashboardPage() {
           </DialogHeader>
           <div className="mt-2">
             <label className="text-sm">Subject</label>
-            <Input value={emailSubject} onChange={(e) => setEmailSubject((e.target as HTMLInputElement).value)} />
+            <Input value={emailSubject} onChange={(e: { target: { value: string } }) => setEmailSubject(e.target.value)} />
             <label className="text-sm mt-2">Message</label>
-            <Textarea value={emailMessage} onChange={(e) => setEmailMessage((e.target as HTMLTextAreaElement).value)} rows={6} />
+            <Textarea value={emailMessage} onChange={(e: { target: { value: string } }) => setEmailMessage(e.target.value)} rows={6} />
           </div>
           <DialogFooter>
             <div className="flex gap-2">

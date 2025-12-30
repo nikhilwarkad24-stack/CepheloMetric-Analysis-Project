@@ -92,6 +92,9 @@ export function LandingHeader() {
           <span className="text-xl font-bold tracking-tight text-foreground">Ceph Studio</span>
         </Link>
         <div className="flex items-center gap-2">
+          <Link href="/pricing" className="hidden sm:inline-block text-sm font-medium px-3 py-1 rounded hover:bg-muted">
+            Pricing
+          </Link>
           {user ? (
             <>
               <DropdownMenu>
@@ -105,6 +108,7 @@ export function LandingHeader() {
                   <DropdownMenuLabel className="flex flex-col">
                     <span className="font-semibold">{user.name}</span>
                     <span className="text-xs text-muted-foreground">{user.email}</span>
+                    <span className="text-xs text-muted-foreground mt-1">Plan: <span className="font-medium">{user.subscriptionStatus ?? 'free'}</span></span>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {user.role === 'admin' && (

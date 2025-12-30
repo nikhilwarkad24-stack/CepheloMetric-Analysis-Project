@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { LandingHeader } from '@/components/landing-header';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Sparkles } from 'lucide-react';
@@ -16,7 +17,6 @@ export default function PricingPage() {
   const handleServerSubscribe = async () => {
     setLoading(true);
     try {
-      // Create a Razorpay order on the server
       const res = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -29,7 +29,6 @@ export default function PricingPage() {
       const order = data.order;
       const keyId = data.keyId;
 
-      // Load Razorpay checkout script if not already loaded
       if (typeof (window as any).Razorpay === 'undefined') {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement('script');
@@ -48,7 +47,6 @@ export default function PricingPage() {
         description: 'Standard Plan — 100 analyses',
         order_id: order.id,
         handler: async (response: any) => {
-          // Verify the payment on the server
           try {
             const verifyRes = await fetch('/api/payment/verify', {
               method: 'POST',
@@ -66,9 +64,7 @@ export default function PricingPage() {
             toast({ variant: 'destructive', title: 'Payment Failed', description: 'Verification failed. Please contact support.' });
           }
         },
-        prefill: {
-          name: '',
-        },
+        prefill: { name: '' },
         notes: {},
         theme: { color: '#111827' },
       } as any;
@@ -85,10 +81,27 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
+    <>
+      <LandingHeader />
+      <div className="max-w-5xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold mb-4">Choose a plan</h1>
-      <p className="text-muted-foreground mb-8">Your free trial includes 3 analyses. Upgrade to continue using the studio and enable downloads.</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <p className="text-muted-foreground mb-8">Your free trial includes 3 analyses — enough to confirm the tool's accuracy. The Free tier allows up to 3 analyses with basic studio access; reporting and downloads are available on paid plans.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 flex flex-col border">
+          <h3 className="text-xl font-bold">Free</h3>
+          <p className="text-muted-foreground mt-1 mb-4 text-sm">Run up to 3 analyses to verify accuracy. No reporting or downloads included.</p>
+          <p className="text-4xl font-extrabold my-2">Free</p>
+          <p className="text-muted-foreground text-sm">Get started with the Studio</p>
+          <ul className="mt-6 space-y-2 text-sm text-muted-foreground flex-1">
+            <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary"/> 3 Analyses</li>
+            <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary"/> Basic Studio Tools</li>
+            <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary"/> In-browser viewing only (no downloads)</li>
+          </ul>
+          <div className="mt-6">
+            <Link href="/studio"><Button className="w-full" variant="outline">Try Free</Button></Link>
+          </div>
+        </Card>
+
         <Card className="p-6 flex flex-col">
           <h3 className="text-xl font-bold">Standard</h3>
           <p className="text-muted-foreground mt-1 mb-4 text-sm">100 analyses, reporting & downloads.</p>
@@ -116,9 +129,10 @@ export default function PricingPage() {
       </div>
 
       <div className="mt-8 text-sm text-muted-foreground">
-        <p>If you signed in using Firebase, please upgrade from within the Studio UI (click "Upgrade"). If you used local/email sign-in, the button above will upgrade your account immediately (server-side).</p>
+        <p>If you signed in using Firebase, please upgrade from within the Studio UI (click \"Upgrade\"). If you used local/email sign-in, the button above will upgrade your account immediately (server-side).</p>
         <p className="mt-2">Need help? <Link href="/support" className="text-primary underline">Contact support</Link></p>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

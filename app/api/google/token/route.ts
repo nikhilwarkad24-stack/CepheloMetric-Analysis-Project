@@ -147,6 +147,9 @@ export async function POST(request: Request) {
         name: user.name,
         photoURL: user.photoURL,
         role: user.role,
+        subscriptionStatus: user.subscriptionStatus ?? 'free',
+        analysisLimit: user.analysisLimit ?? 3,
+        analysisCount: user.analysisCount ?? 0,
       },
       token: appToken,
     });

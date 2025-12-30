@@ -31,8 +31,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const userId = params.id;
 
-    // Read request body for action
-    const body = await request.json();
+    // Read request body for action (body may be empty for toggle requests)
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch (err) {
+      // Empty body or invalid JSON — default to empty object
+      body = {};
+    }
     const action = body.action as string | undefined;
 
     // Prevent admin from deactivating themselves for toggle (also when action is omitted)

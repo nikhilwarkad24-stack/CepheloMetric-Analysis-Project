@@ -4,6 +4,9 @@ export type UserData = {
   name: string;
   photoURL?: string;
   role: 'user' | 'admin';
+  // Optional subscription fields
+  subscriptionStatus?: 'free' | 'standard' | 'premium';
+  analysisLimit?: number | null;
 };
 
 export function getUserFromStorage(): UserData | null {

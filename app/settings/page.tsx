@@ -70,6 +70,14 @@ export default function SettingsPage() {
                   <p className="font-semibold text-lg">{user.name}</p>
                   <p className="text-sm text-muted-foreground">{user.email}</p>
                   <p className="text-xs text-muted-foreground mt-1">ID: {user.id}</p>
+                  <p className="text-sm mt-2">Subscription: <span className="font-medium">{user.subscriptionStatus ?? 'free'}</span></p>
+                  {user.subscriptionStatus !== 'premium' && (
+                    <div className="mt-2">
+                      <Button asChild size="sm">
+                        <Link href="/pricing">Upgrade</Link>
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>

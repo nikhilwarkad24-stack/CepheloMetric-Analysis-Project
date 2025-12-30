@@ -102,6 +102,10 @@ export async function POST(request: Request) {
         email: newUser.email,
         name: newUser.name,
         role: newUser.role,
+        photoURL: newUser.photoURL,
+        subscriptionStatus: newUser.subscriptionStatus ?? 'free',
+        analysisLimit: newUser.analysisLimit ?? 3,
+        analysisCount: newUser.analysisCount ?? 0,
       },
       token: appToken,
     });

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUserFromStorage, clearAuthStorage, type UserData } from '@/lib/auth';
 import { useAuthProtection } from '@/hooks/use-auth-protection';
+import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import Link from 'next/link';
 
 export default function DashboardPage() {
   useAuthProtection();
+  const { toast } = useToast();
   
   const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +72,10 @@ export default function DashboardPage() {
     return <div className="flex items-center justify-center min-h-screen">Please log in</div>;
   }
 
+  const plan = serverUser?.subscriptionStatus ?? user.subscriptionStatus ?? 'free';
+  const analysisCount = serverUser?.analysisCount ?? 0;
+  const analysisLimit = serverUser?.analysisLimit ?? user.analysisLimit ?? 3;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/80">
       <div className="container py-12">
@@ -80,6 +86,7 @@ export default function DashboardPage() {
               Welcome, {user.name}!
             </h1>
             <p className="text-lg text-muted-foreground">{user.email}</p>
+            <p className="text-sm text-muted-foreground mt-1">Plan: <span className="font-medium">{plan}</span></p>
           </div>
           <Avatar className="h-20 w-20">
             <AvatarImage src={user.photoURL} alt={user.name} />
@@ -120,13 +127,13 @@ export default function DashboardPage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm text-muted-foreground">Plan</p>
-                <p className="font-medium">{serverUser?.subscriptionStatus ?? 'Free Trial'}</p>
+                <p className="font-medium">{plan === 'free' ? 'Free' : plan.charAt(0).toUpperCase() + plan.slice(1)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Analyses used</p>
-                <p className="font-medium">{(serverUser?.analysisCount ?? 0)} / {(serverUser?.analysisLimit ?? 3) === null ? '∞' : (serverUser?.analysisLimit ?? 3)}</p>
+                <p className="font-medium">{analysisCount} / {analysisLimit === null ? '∞' : analysisLimit}</p>
                 <div className="w-full bg-muted h-2 rounded mt-2">
-                  <div className="h-2 rounded bg-primary" style={{ width: `${Math.min(100, Math.floor(((serverUser?.analysisCount ?? 0) / ((serverUser?.analysisLimit ?? 3) || 1)) * 100))}%` }} />
+                  <div className="h-2 rounded bg-primary" style={{ width: `${Math.min(100, Math.floor(((analysisCount) / ((analysisLimit || 1))) * 100))}%` }} />
                 </div>
               </div>
 
@@ -183,6 +190,12 @@ export default function DashboardPage() {
                         <Link href={`/studio?id=${a._id}`}>View</Link>
                       </Button>
                       <Button size="sm" variant="outline" onClick={async () => {
+                        const effectivePlan = serverUser?.subscriptionStatus ?? user.subscriptionStatus ?? 'free';
+                        if (effectivePlan === 'free') {
+                          toast({ variant: 'destructive', title: 'Upgrade required', description: 'Downloads are available for paid plans only.' });
+                          router.push('/pricing');
+                          return;
+                        }
                         // regenerate PDF client-side and download (requires export permission)
                         try {
                           const res = await fetch(`/api/analysis/list`);
